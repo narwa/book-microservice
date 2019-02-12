@@ -17,10 +17,14 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testng.collections.Lists;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 @RunWith(SpringRunner.class)
@@ -36,6 +40,7 @@ public class MultiplicationResultAttemptControllerTest {
     // This object will be magically initialized by the initFields method below.
     private JacksonTester<MultiplicationResultAttempt> jsonResult;
     private JacksonTester<MultiplicationResultAttemptController.ResultResponse> jsonResponse;
+    private JacksonTester<List<MultiplicationResultAttempt>> jsonResultAttemptList;
 
     @Before
     public void setup() {
@@ -49,25 +54,56 @@ public class MultiplicationResultAttemptControllerTest {
 
     void genericParameterizedTest(final boolean correct) throws Exception {
         // given (remember we're not testing here the service itself)
-        given(multiplicationService
-                .checkAttempt(any(MultiplicationResultAttempt.class)))
-                .willReturn(correct);
+        given(multiplicationService.checkAttempt(any(MultiplicationResultAttempt.class))).willReturn(correct);
+
         User user = new User("john");
         Multiplication multiplication = new Multiplication(50, 70);
-        MultiplicationResultAttempt attempt = new MultiplicationResultAttempt(
-                user, multiplication, 3500);
+        MultiplicationResultAttempt attempt = new MultiplicationResultAttempt(user, multiplication, 3500,correct);
 
-        System.out.println(jsonResult.write(attempt).getJson());
+        //System.out.println(jsonResult.write(attempt).getJson());
         // when
         MockHttpServletResponse response = mvc.perform(
-                post("/results").contentType(MediaType.APPLICATION_JSON)
+                post("/results").
+                        contentType(MediaType.APPLICATION_JSON)
                         .content(jsonResult.write(attempt).getJson()))
                 .andReturn().getResponse();
 
         // then
         assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+        //System.out.println(response.getContentAsString());
         assertThat(response.getContentAsString()).isEqualTo(
-                jsonResponse.write(new MultiplicationResultAttemptController.ResultResponse(correct)).getJson());
+                jsonResult.write(
+                        new MultiplicationResultAttempt(attempt. getUser(),
+                                attempt.getMultiplication(),
+                                attempt.getResultAttempt(),
+                                correct)
+                ).getJson());
+
+    }
+
+    @Test
+    public void getUserStats() throws Exception {
+        // given
+        User user = new User("john_doe");
+        Multiplication multiplication = new Multiplication(50, 70);
+        MultiplicationResultAttempt attempt = new MultiplicationResultAttempt(
+                user, multiplication, 3500, true);
+        List<MultiplicationResultAttempt> recentAttempts = Lists.newArrayList(attempt, attempt);
+        given(multiplicationService
+                .getStatsForUser("john_doe"))
+                .willReturn(recentAttempts);
+
+        // when
+        MockHttpServletResponse response = mvc.perform(
+                get("/results").param("alias", "john_doe"))
+                .andReturn().getResponse();
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(response.getContentAsString()).isEqualTo(
+                jsonResultAttemptList.write(
+                        recentAttempts
+                ).getJson());
     }
 
 
